@@ -48,11 +48,12 @@ ggplot(data = titanic) +
 ```{r}
 # spread of data and outliers for age by passenger class
 ggplot(data = titanic)+
-  geom_point(aes(x= Age, y= Pclass))
-
+  geom_point(aes(x= Pclass, y= Age)) + 
+  stat_summary(mapping = aes(x = Pclass, y = Age),
+    fun = median, geom = "crossbar", width = 0.4)
 
 ```
 ```{r}
-# setting 
+# 
 ```
 
