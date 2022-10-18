@@ -1,0 +1,58 @@
+---
+title: "MIDTERM EXAM"
+author: "Cecilia Nartey"
+date: "10/15/2022"
+output: html_document
+---
+
+```{r}
+# library packages
+
+library(readr)
+library(haven)
+pacman::p_load(haven, readr, dplyr, openxlsx)
+```
+
+```{r}
+# import dataset from github
+ titanic <- read_csv("https://github.com/kijohnson/Data/blob/main/titanic.csv?raw=true")
+```
+
+```{r}
+# Determine median age by passenger class
+titanic %>%
+    group_by(Pclass) %>%
+    dplyr::summarize(median_age = median(Age, na.rm=TRUE))
+
+```
+# The median age of passengers in first class was 38.5 years
+# The median age of passengers in second class was 29 years
+# The median age of passengers in third class was 24 years
+
+```{r}
+library('tidyverse')
+```
+
+```{r}
+# plot of medians by passenger class
+
+ggplot(data = titanic) +
+  stat_summary(
+    mapping = aes(x= Pclass, y = Age),
+    fun.min = min,
+    fun.max = max,
+    fun = median
+  )
+```
+
+```{r}
+# spread of data and outliers for age by passenger class
+ggplot(data = titanic)+
+  geom_point(aes(x= Age, y= Pclass))
+
+
+```
+```{r}
+# setting 
+```
+
