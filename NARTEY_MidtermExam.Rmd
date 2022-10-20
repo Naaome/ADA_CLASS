@@ -73,3 +73,22 @@ table1(~Sex | Pclass, data= titanic)
  
 ```
 
+
+```{r}
+# plot that shows medians, spread of data, and outliers for the continuous variable age according to passenger class
+ttp = ggplot(titanic, aes(x = factor(Pclass), y = Age, fill = factor(Pclass))) +
+  geom_boxplot() +
+  stat_summary(
+    aes(label = round(stat(y), 1)),
+    geom = "text",
+    fun = function(y) { o <- boxplot.stats(y)$out; if(length(o) == 0) NA else o },
+    hjust = -1, size = 2
+  )
+
+
+ttp
+
+
+
+```
+
