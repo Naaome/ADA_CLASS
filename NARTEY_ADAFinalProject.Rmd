@@ -6,8 +6,9 @@ output: html_document
 ---
 
 
-# This project aims to determine whether there is an association between physical activity and asthma among teenagers in California. 
-
+# This project aims to: 
+# i, determine whether there is an association between physical activity and asthma among teenagers in California during 2019 - 2020. 
+# ii. dtermine whether sex modifies this association 
 
 To start,
 # library already installed packages
