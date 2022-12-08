@@ -1,0 +1,482 @@
+---
+title: "Nartey_ADA final Project"
+author: "Cecilia Nartey"
+date: '2022-12-07'
+output: html_document
+---
+
+
+# This project aims to determine whether there is an association between physical activity and asthma among teenagers in California. 
+
+
+To start,
+# library already installed packages
+
+```{r}
+pacman::p_load(haven, foreign, odds.n.ends, blorr, lmtest, car,  broom, ggplot2, tidyverse, jtools,  naniar, VIM, mice, lattice, table1)
+
+```
+
+```{r}
+CHISTeen <- read_sav(file = "teen_2020_spss/TEEN.sav")
+```
+# Data exploration
+
+## check variable types in dataset
+
+```{r}
+str(CHISTeen)
+```
+
+# get head of dataframe
+
+```{r}
+head(CHISTeen)
+```
+# Data management
+# 1. Convert "Inapplicable(-1) and Not ascertained(-9)" to NA and drop NAs
+
+# 2. Select variables that will be needed and rename them
+i. Physical activity
+~ TD27_P1 : How many days walked home from school in the past week
+Renamed  PhysAct1
+
+~ TD30_P1 : How many days bike/skate home from school in the past week
+Renamed PhysAct2
+
+~ TD39: Time doing sitting activities on weekends (TV, computer games, talk with friends) on weekends
+Renamed SitActTimeWknds
+
+ii. Asthma
+~ TB18: Asthma episode/attack in past 12 mos
+Renamed AsthAtt12
+
+The above is a subset of the variable:
+~ TB5: Doctor ever told has asthma
+
+Covariates
+iii. Age
+~ SRAGE_P; renamed Age 
+
+iv. Sex
+~ SRSEX; renamed Sex
+
+v. Race
+~ RaceCN_P; renamed Race
+
+```{r}
+# Converting -1 to NAs
+CHISTeen <- CHISTeen %>%
+    mutate(across(
+        ACMDMT_P1:YRUSM2_P1,
+        ~na_if(., -1)
+    ))
+# Converting -9 to NAs
+CHISTeen <- CHISTeen %>%
+    mutate(across(
+        ACMDMT_P1:YRUSM2_P1,
+        ~na_if(., -9)
+    ))
+
+```
+
+Next step, rename variables of interest
+
+```{r}
+# Renaming variables
+## Renaming the variables of interest
+CHISTeen <- CHISTeen %>%
+  rename (Age = SRAGE_P,
+          Sex = SRSEX, 
+          Race = RACECNT_P1, 
+         PhysAct1 = (TD27_P1), 
+          PhysAct2 = (TD30_P1), 
+          SitActTimeWknds = TD39, 
+          )
+
+CHISTeen <- CHISTeen %>%
+  rename (AsthAtt12 = TB18,
+         DocEverToldAsth = TB5)
+
+```
+
+Next step, select variables of interest
+
+```{r}
+# selecting variables of interest
+
+CHISTeen_VAR <- select(CHISTeen, c('Sex', 'Race', 'Age','PhysAct1', 'PhysAct2','SitActTimeWknds', 'AsthAtt12', 'DocEverToldAsth'))
+
+# checking that heading for correct renaming of variables
+head(CHISTeen_VAR)
+```
+# Complete case analysis exclusions, exclude missing data and/or NAs
+
+```{r}
+# Dropping NAs
+CHISTeenFin <-CHISTeen_VAR %>%
+  drop_na(PhysAct1,PhysAct2,Sex,Race,Age,AsthAtt12)
+
+```
+
+# Check and change classes of some variables and recode some that need recoding
+
+```{r}
+# changing to numeric
+CHISTeen$PhysAct1 <- as.numeric(CHISTeen$PhysAct1 )
+class(CHISTeen$PhysAct1 ) # for "sanity" check
+
+CHISTeen$PhysAct2 <- as.numeric(CHISTeen$PhysAct2 )
+class(CHISTeen$PhysAct2) # for "sanity" check
+
+CHISTeenFin$PA_score <-CHISTeenFin$PhysAct1+CHISTeenFin$PhysAct2 
+summary(CHISTeenFin$PA_score)
+
+# changing to numeric
+CHISTeenFin$SitActTimeWknds <- as.numeric(CHISTeenFin$SitActTimeWknds)
+class(CHISTeenFin$SitActTimeWknds) # for "sanity" check
+
+# changing to factor
+CHISTeenFin$Sex <- as.factor(CHISTeenFin$Sex)
+CHISTeenFin$Race <- as.factor(CHISTeenFin$Race)
+CHISTeenFin$Age <- as.factor(CHISTeenFin$Age)
+CHISTeenFin$AsthAtt12 <- as.factor(CHISTeenFin$AsthAtt12)
+
+#sanity check
+class(CHISTeenFin$Sex)
+class(CHISTeenFin$Race)
+class(CHISTeenFin$Age)
+class(CHISTeenFin$AsthAtt12)
+
+# Recoding some variables
+CHISTeenFin <- CHISTeenFin %>%
+  mutate(Age = case_when(Age== 12~ 2,
+                            Age== 13 ~ 3,
+                         Age == 14 ~ 4,
+                         Age == 15 ~ 5,
+                         Age == 16 ~ 6,
+                         Age == 17 ~ 7
+                         ))
+
+
+CHISTeenFin <- CHISTeenFin %>%
+  mutate(Race = case_when(Race == 3 ~ 1,
+                           Race== 5 ~ 2,
+                         Race== 6 ~ 3,
+                         Race == 7 ~ 3,
+                         ))
+
+
+# Combining walking and biking/skating home from school as one variable for physical activity
+
+CHISTeenFin$PA_cat <- ifelse(CHISTeenFin$PhysAct1 ==0 & CHISTeenFin$PhysAct2  ==0, 0, 1)
+
+
+table(CHISTeenFin$PA_cat, CHISTeenFin$AsthAtt12, useNA = 'always') # for "sanity" check
+
+```
+ 
+# Outcome variable (Asthma) -  recode to 1 - "yes", 0 - "no"
+ 
+```{r}
+# recoding to 1 - "yes", 0 - "no"
+CHISTeenFin <- CHISTeenFin %>%
+  mutate(AsthAtt12 = case_when(AsthAtt12== 1~ 1,
+                            AsthAtt12== 2 ~ 0
+                             ))
+
+table(CHISTeenFin$PA_cat, CHISTeenFin$AsthAtt12, useNA = 'always')
+```
+ 
+ 
+# Descriptives table
+
+```{r}
+CHISTeenFin$Race <- 
+  factor(CHISTeenFin$Race, levels=c(1,2,3),
+         labels=c("Asian", "White", "Other&Multi-Racial"))
+
+  
+CHISTeenFin$AsthAtt12<- 
+  factor(CHISTeenFin$AsthAtt12, levels=c(0,1),
+         labels=c("No Asthmatic Episode", "Had Asthmatic Episode"))
+
+CHISTeenFin$PhysAct1<- 
+  factor(CHISTeenFin$PhysAct1, levels=c(0,1,3,5),
+         labels=c("0 days", "1-2 days", "3-4 days", "5 or more days"))
+
+CHISTeenFin$PhysAct2 <- 
+  factor(CHISTeenFin$PhysAct2 , levels=c(0,1,3),
+         labels=c("0 days", "1-2 days" , "3-5 days"))
+
+CHISTeenFin$Sex<- 
+  factor(CHISTeenFin$Sex, levels=c(1,2),
+         labels=c("Male","Female"))
+
+CHISTeenFin$Age <- 
+  factor(CHISTeenFin$Age, levels=c(2,3,4,5,6,7), 
+  labels=c("12 year olds", "13 year olds", "14 year olds", "15 year olds", "16 year olds", "17 year olds"))
+
+CHISTeenFin$Race<-setLabel(CHISTeenFin$Race, "Race/Ethnicity")
+CHISTeenFin$Sex<-setLabel(CHISTeenFin$Sex, "Sex")
+CHISTeenFin$Age<-setLabel(CHISTeenFin$Age, "Age")
+CHISTeenFin$AsthAtt12<-setLabel(CHISTeenFin$AsthAtt12, "Asthma Status Episodes")
+CHISTeenFin$PhysAct1<-setLabel(CHISTeenFin$PhysAct1, "Days walked home from school")
+CHISTeenFin$PhysAct2<-setLabel(CHISTeenFin$PhysAct2, "Days biked/skated home from school")
+CHISTeenFin$SitActTimeWknds<-setLabel(CHISTeenFin$SitActTimeWknds, "Amount of inactivity time")
+
+units(CHISTeenFin$Age) <- "years"
+
+Table1 <- table1 (~ Age + Sex + Race + PhysAct1 + PhysAct2 + SitActTimeWknds |AsthAtt12, overall="Total", CHISTeenFin )
+
+```
+# Copy table1 to word doc or powerpoint 
+```{r}
+library(flextable) 
+library(magrittr)
+t1flex(Table1)%>%
+  save_as_docx(path = "table1.docx")
+```
+
+
+# Construct Figure 1 to illustrate exclusion process
+
+```{r}
+
+# install necessary packages
+
+install.packages("DiagrammeR")
+library(DiagrammeR) 
+
+
+grViz("digraph flowchart {
+
+      # node definitions with substituted label text
+      node [fontname = Helvetica, shape = rectangle, fontsize=10] 
+      # notes indicate how many boxes you will have in your diagram. Since I have two sets of exclusions, I will have three nodes.
+      tab1 [label = '@@1'] # starting
+      tab2 [label = '@@2'] # exclusion 1
+      tab3 [label = '@@3'] # exclusion 2
+      
+      # edge definitions with the node IDs are used to indicate how the rectangle boxes flow from each other. This is a simple flow chart but I could create branching instead as below
+      tab1 -> tab2 -> tab3 
+}
+      #This set of code provides the text in each rectangle box.
+      [1]: 'Records received from CHIS for teenagers in California n=1365'
+      [2]: 'Excluding teenagers not diagnosed with asthma n=385'
+      [3]: 'Excluding individuals with missing data on variables used in the analysis n=213'
+      ") 
+
+```
+
+# Part 3: Data visualization and modeling
+
+## First, let's visually explore the data
+
+```{r}
+CHISTeenFin$SitActTimeWknds <- as.numeric(CHISTeenFin$SitActTimeWknds)
+
+library(tidyverse)
+
+# Distribution of asthmatic episodes and amount of inactivity time
+
+ggplot(data = CHISTeenFin) +
+  geom_freqpoly(bin=3, aes(x = SitActTimeWknds, color = AsthAtt12)) +
+  labs(x = "Inactivity time", title = "Amount of inactivity time on weekends Frequency Polygons by Asthma Status")
+
+```
+# Run logistic regression  models
+
+## First, run a univariable (unadjusted) logistic regression for amount of age as a continuous variable
+
+```{r}
+# change age back to numeric
+CHISTeenFin$Age <- as.numeric(CHISTeenFin$Age)
+class(CHISTeenFin$Age)
+
+
+model1<- glm(AsthAtt12 ~ Age, data=CHISTeenFin, family="binomial")
+summary(model1)
+```
+# Get Odds Ratios
+```{r}
+odds.n.ends(model1) 
+```
+# for every one unit increase in age, the odds of experiencing an asthmatic episode increases by 0.87 times. 
+
+# Model sensitivity is 70.4%
+
+
+# Test linearity assumption
+```{r}
+CHISTeenFin <- CHISTeenFin %>%
+  mutate(Age_log = SitActTimeWknds * log(Age)) # create term to test linearity
+
+model2 <- glm(AsthAtt12 ~ Age + Age_log, data=CHISTeenFin, family="binomial")
+
+summary(model2)
+
+# Since the p-value for the log term (SitActTimeWknds_log) is >.05, we fail to reject the hypothesis that the linearity assumption is not met using the Box Tidwell test, therefore we can use age as a continous or linear variable
+```
+
+# Linearity assumption is not violated as the p-value is non-significant (p > 0.05)
+
+# Now lets look at physical activity during the week
+
+```{r}
+
+# first, label levels in PA_cat
+CHISTeenFin$PA_cat<- 
+  factor(CHISTeenFin$PA_cat, levels=c(0,1),
+         labels=c("No days walk or bike/skate from school", "1 or more days walk or bike/skate from scchool"))
+
+baseline_model3 <- glm(AsthAtt12 ~ PA_cat, data=CHISTeenFin, family="binomial")
+summary(baseline_model3)
+```
+# Get odds and ends
+```{r}
+odds.n.ends(baseline_model3)
+```
+# Interpretation. OR = 1.24
+The odds ratio is 1.24 with a 95% CI of 0.64 and 2.33
+The odds of experiencing an asthmatic episode for teenagers who walk or bike/skate home from school 1 or more days during the week is 24% higher compared to those who did not walk or bike/skate home from school any day in the week.
+
+
+# Adjusting for age, sex 
+```{r}
+Adjustedmodel1 <- glm(AsthAtt12 ~ PA_cat + Age+ Sex, data=CHISTeenFin, family="binomial")
+summary(Adjustedmodel1)
+
+```
+# Get odds and ends
+```{r}
+odds.n.ends(Adjustedmodel1)
+
+```
+
+# Interpretation of Adjusted OR = 1.27
+The odds ratio is 1.24 with a 95% CI of 0.66 and 2.41
+After adjusting for age and sex, the odds of experiencing an asthmatic episode for teenagers who walk or bike/skate home 1 more days from school during the week is 27% higher compared to those who did not walk or bike/skate home from school any day in the week.
+
+## Look at assumptions for multicollinearity using the vif function
+```{r}
+
+vif(Adjustedmodel1)
+
+```
+
+
+```{r}
+vif(Adjustedmodel1)
+```
+
+# VIF values are <5, thus there is no multicollinearity
+
+Now, lets look for any influential values using Cook's Distance
+```{r}
+# Plot Cooks's Distance
+
+plot(Adjustedmodel1, which = 4, id.n = 3, col="red") # which gives Cook's distance calculations (see https://stat.ethz.ch/R-manual/R-patched/library/stats/html/plot.lm.html)
+```
+
+# ## Next we will get Cook's D calculations for each obervation and some other stats using the augment function from the Broom package.
+
+```{r}
+Adjustedmodel2.data <- augment(Adjustedmodel1) %>%  
+  mutate(index = 1:n()) 
+
+head(Adjustedmodel2.data)
+```
+## Identify and exclude observations with a Cook's Distance greater than a cutoff, use 3 x the mean Cook's D 
+
+```{r}
+cuttoff <- mean(Adjustedmodel1.data$.cooksd)*3 # defines cutoff variable
+
+CHISTeenFin_out <- Adjustedmodel1.data %>% # excludes observations
+  filter(.cooksd<cuttoff)
+
+nrow(CHISTeenFin_out)/nrow(CHISTeenFin) # check percent kept
+# 88.6% of the observations are kept
+# many observations are excluded
+```
+
+# set cutoff to 0.01
+
+```{r}
+cuttoff <- 0.01 # defines cutoff variable
+
+CHISTeenFin_out2 <- Adjustedmodel1.data %>% # excludes observations
+  filter(.cooksd<cuttoff)
+
+nrow(CHISTeenFin_out2)/nrow(CHISTeenFin)
+```
+
+
+# Compare coefficients
+
+```{r}
+compareCoefs(Adjustedmodel1, Adjustedmodel2)
+```
+# Now, lets do a model fit assessment using 
+```{r}
+
+blr_test_hosmer_lemeshow(Adjustedmodel1)
+
+```
+# Non-significant p-value implies that model fitness is good
+
+
+# Compare the full model to the reduced model with the lrtest function
+```{r}
+# likelihood ratio test: compare two nested models
+lrtest(Adjustedmodel1, Adjustedmodel2)
+```
+
+
+## Let's see how well our model performs for classification and prediction
+
+```{r}
+odds.n.ends(Adjustedmodel1, rocPlot = TRUE, predProbPlot = TRUE)
+```
+
+# Construct model summary table
+
+```{r}
+# First, install packages
+install.packages("modelsummary")
+install.packages("flextable")
+
+library(modelsummary)
+library(flextable)
+
+models = list(baseline_model3, Adjustedmodel1)
+modelsummary(models, exponentiate = TRUE, stars = T, statistic = 'conf.int', conf_level = .95)
+modelsummary(models, exponentiate = TRUE, stars = T, statistic = 'conf.int', conf_level = .95, footnote='OR = ODDs Ratio', output = "table.docx")
+
+```
+
+
+# Assess for whether sex modifies the relationship between physical activity and asthma
+```{r}
+
+# Change age back to numeric 
+CHISTeenFin$Age <- as.numeric(CHISTeenFin$Age)
+class(CHISTeenFin$Age)
+
+# Models with and without interaction terms between sex and physical activity 
+Adjustedmodel1 <- glm(AsthAtt12 ~ PA_cat + Age+ Sex, data=CHISTeenFin, family="binomial")
+summary(Adjustedmodel1)
+odds.n.ends(Adjustedmodel1)
+
+model5<- glm(AsthAtt12 ~ PA_cat + Age+ Sex + Sex*PA_cat, data=CHISTeenFin, family="binomial")
+summary(model5) 
+odds.n.ends(model5)
+
+# Test the hypothesis with the lrtest
+lrtest(Adjustedmodel1, model5)
+lrtest(model5,Adjustedmodel1)
+```
+
+# interaction term via the lr test is not significant so I will not go on to run models stratified by sex. 
+
+
